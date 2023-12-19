@@ -23,6 +23,11 @@ kotlin {
     }
 
     nativeTarget.apply {
+        compilations.getByName("main"){
+            cinterops{
+                val libinet by creating
+            }
+        }
         binaries {
             executable {
                 entryPoint = "main"
