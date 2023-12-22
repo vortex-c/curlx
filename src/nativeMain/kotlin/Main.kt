@@ -1,6 +1,11 @@
+import kotlinx.cinterop.ExperimentalForeignApi
+
+@OptIn(ExperimentalForeignApi::class)
 fun main() {
-    println("DNS Probing")
-    val network = Network()
-    val addresses = network.getIpAddress("www.google.com")
-    println("RESOLVED HOST IP: $addresses")
+    WinSocketScope {
+        println("DNS Probing")
+        val address = getIpAddress("www.google.com")
+        println("HOST IP ADDRESS: $address")
+    }
 }
+
