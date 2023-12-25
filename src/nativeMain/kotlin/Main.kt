@@ -4,8 +4,10 @@ import kotlinx.cinterop.ExperimentalForeignApi
 fun main() {
     WinSocketScope {
         println("DNS Probing")
-        val address = getIpAddress("www.google.com")
-        println("HOST IP ADDRESS: $address")
+        val address = getIpAddress("eu.httpbin.org")
+        println("Connecting to: ${address.first().first}")
+        val cr = openConnection(address.first())
+        if (cr != 0) println("Failed connecting to: ${address.first().first},\nERROR: $cr ")
     }
 }
 
