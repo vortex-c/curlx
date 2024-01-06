@@ -30,6 +30,7 @@ kotlin {
         }
         binaries {
             executable {
+                runTask?.args("-X DELETE http://eu.httpbin.org/delete")
                 entryPoint = "main"
             }
         }

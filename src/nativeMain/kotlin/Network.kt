@@ -6,6 +6,8 @@ import platform.posix.WSACleanup
 import platform.posix.WSAStartup
 import platform.posix.socket
 import platform.posix.connect
+import platform.posix.send
+import platform.posix.recv
 import platform.windows.*
 
 
@@ -14,8 +16,8 @@ inline fun WinSocketScope(crossinline call: MemScope.() -> Unit) = memScoped {
     try {
         val wsaData = alloc<WSADATA>()
         val winSocket = WSAStartup(2u, wsaData.ptr)
-        if (winSocket != 0) perror("winSocket: ERROR CODE: $winSocket")
-        call()
+        if (winSocket != 0) {perror("winSocket: ERROR CODE: $winSocket")}
+        else{call()}
     } finally {
         WSACleanup()
     }
@@ -65,12 +67,12 @@ fun MemScope.getIpAddress(url: String): List<Pair<String, UShort>> {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-fun MemScope.openConnection(address: Pair<String, UShort>): Int {
-    val sockAddr:sockaddr? = when (address.second) {
+fun MemScope.openConnection(address: Pair<String, UShort>, port:Int): ULong {
+    val sockAddr: sockaddr? = when (address.second) {
         AF_INET.toUShort() -> {
             val sd = alloc<sockaddr_in>()
             sd.sin_family = AF_INET.toShort()
-            sd.sin_port = htons(80u)
+            sd.sin_port = htons(port.toUShort())
             inet_pton(AF_INET, address.first, sd.sin_addr.ptr)
             sd.reinterpret<sockaddr>()
         }
@@ -78,7 +80,7 @@ fun MemScope.openConnection(address: Pair<String, UShort>): Int {
         AF_INET6.toUShort() -> {
             val sd = alloc<sockaddr_in6>()
             sd.sin6_family = AF_INET.toShort()
-            sd.sin6_port = htons(80u)
+            sd.sin6_port = htons(port.toUShort())
             inet_pton(AF_INET, address.first, sd.sin6_addr.ptr)
             sd.reinterpret<sockaddr>()
         }
@@ -86,7 +88,36 @@ fun MemScope.openConnection(address: Pair<String, UShort>): Int {
         else -> null
     }
     if (sockAddr == null) perror("ERROR: Provide valid address family")
-    val socketFd: SOCKET = socket(address.second.toInt() , SOCK_STREAM , 0)
-    if(socketFd.toInt() == 0 ) perror("ERROR: Socket File Descriptor: $socketFd")
-    return connect(socketFd, sockAddr!!.readValue(), sizeOf<sockaddr>().toInt())
+    val socketFd: SOCKET = socket(address.second.toInt(), SOCK_STREAM, 0)
+    if (socketFd.toInt() == 0) perror("ERROR: Socket File Descriptor: $socketFd")
+    val cr = connect(socketFd, sockAddr!!.readValue(), sizeOf<sockaddr>().toInt())
+    if (cr != 0) println("Failed connecting to: ${address.first},\nERROR: $cr ")
+    return socketFd
 }
+
+@OptIn(ExperimentalForeignApi::class)
+fun sendRequest(socketFd: ULong, requestMethod:String ,host:String, endPoint: String): Int {
+    val request = "$requestMethod $endPoint HTTP/1.1\r\n" +
+            "Host: $host\r\n" +
+            "Accept: */*\r\n" +
+            "Connection: close\r\n\r\n"
+    println("Sending Request: $request")
+    return send(socketFd, request.cstr, request.cstr.size, 0)
+}
+
+@OptIn(ExperimentalForeignApi::class)
+fun receiveResponse(socketFd: ULong):Data?{
+    val rb = ByteArray(16)
+    return rb.usePinned {
+        val ml = recv(socketFd, it.addressOf(0), rb.size, 0)
+        if (ml != 0){
+            val validData = rb.take(ml).toByteArray()
+            Data(validData.decodeToString(), ml)
+        } else null
+    }
+}
+
+data class Data(
+    val chunk:String,
+    val size:Int
+)
